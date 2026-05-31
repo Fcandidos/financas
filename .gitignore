@@ -1,0 +1,10 @@
+# Arquivos temporários do Office
+~$*
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Node (caso use no futuro)
+node_modules/
