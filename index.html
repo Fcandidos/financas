@@ -777,18 +777,22 @@ window._fload = async function() {
     if(snap.exists()){
       const p=JSON.parse(snap.data().json);
       window.DB=Object.assign({},window.DB,p);
-    } else {
-      // Migração automática: lê dados do path antigo compartilhado
+    } else if(u.email === ADMIN_EMAIL) {
+      // Migração APENAS para o admin: lê dados do path antigo
       try {
         const oldSnap = await getDoc(doc(_db,'jarvis','data'));
-        if(oldSnap.exists()){
+        if(oldSnap.exists() && oldSnap.data().json){
           const p = JSON.parse(oldSnap.data().json);
-          window.DB = Object.assign({}, window.DB, p);
-          // Salva no path do usuário
-          await setDoc(doc(_db,'users',u.uid,'appdata','main'), {json: JSON.stringify(window.DB)});
-          window._migrationDone = true;
+          if(p.clients && p.clients.length > 0){
+            window.DB = Object.assign({}, window.DB, p);
+            // Salva no path do admin
+            await setDoc(doc(_db,'users',u.uid,'appdata','main'), {json: JSON.stringify(window.DB)});
+            // Limpa jarvis/data para ninguém mais pegar
+            await setDoc(doc(_db,'jarvis','data'), {json: JSON.stringify({clients:[],accounts:[],payments:[],clientPayments:{},settings:{}})});
+            window._migrationDone = true;
+          }
         }
-      } catch(em){ console.warn('Migration read:',em); }
+      } catch(em){ console.warn('Migration:',em); }
     }
   } catch(e){ console.warn('Firestore load:',e); }
   if(!window.DB.settings) window.DB.settings={name:'SMART Finance',currency:'R$',alertDays:10};
@@ -796,6 +800,11 @@ window._fload = async function() {
   if(!window.DB.accounts) window.DB.accounts=[];
   if(!window.DB.payments) window.DB.payments=[];
   if(!window.DB.clientPayments) window.DB.clientPayments={};
+};
+
+window._clearUserData = async function(uid){
+  const empty={clients:[],accounts:[],payments:[],clientPayments:{},settings:{name:'SMART Finance',currency:'R$',alertDays:10}};
+  await setDoc(doc(_db,'users',uid,'appdata','main'),{json:JSON.stringify(empty)});
 };
 
 /* ── Perfil de usuário ── */
@@ -2548,6 +2557,7 @@ window.renderUsers = async function(){
         html+='<button class="ua-btn unblock" onclick="blockUser(\''+u.uid+'\',false)">Desbloquear</button>';
       }
       html+='<button class="ua-btn reset" onclick="resetUserPassword(\''+u.email+'\')">Reset Senha</button>';
+      html+='<button class="ua-btn del" style="border-color:rgba(255,214,0,0.4);color:var(--yellow)" onclick="clearUserData(\''+u.uid+'\',\''+u.email+'\')">Limpar Dados</button>';
       html+='<button class="ua-btn del" onclick="deleteUser(\''+u.uid+'\')">Excluir</button>';
     }
     html+='</div></div>';
@@ -2609,6 +2619,14 @@ window.blockUser = async function(uid,block){
     toast('Usuário '+(block?'bloqueado':'desbloqueado')+'!','success');
     window.renderUsers();
   }catch(e){toast('Erro ao '+label+' usuário','error');}
+};
+
+window.clearUserData = async function(uid, email){
+  if(!confirm('Limpar TODOS os dados de '+email+'?\n\nIsso apaga clientes, contas e pagamentos deste usuário. Não pode ser desfeito.')) return;
+  try{
+    await window._clearUserData(uid);
+    toast('Dados de '+email+' limpos com sucesso.','success');
+  }catch(e){toast('Erro ao limpar dados','error');}
 };
 
 window.deleteUser = async function(uid){
