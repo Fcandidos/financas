@@ -1186,28 +1186,37 @@ function getAlertList(){
   var now=today(),m=now.getMonth()+1,y=now.getFullYear(),alertDays=DB.settings.alertDays||10,alerts=[];
   sortedClients().forEach(function(c){
     var dueDay=getClientDueDay(c.id),val=getClientMonthValue(c.id);
-    // Meses passados vencidos
+    var fakeAcc={nick:c.name,dueDay:dueDay,value:val,id:c.id,clientId:c.id};
+    // 1. Meses passados vencidos (um alerta por mês)
     for(var pm=1;pm<m;pm++){
       var pp=getClientPayment(c.id,pm,y);
       if(pp&&pp.status==='paid')continue;
       if(pp&&pp.status==='neutral')continue;
       var pastDue=new Date(y,pm-1,dueDay);
       var pastDays=Math.ceil((now-pastDue)/86400000);
-      if(pastDays>0){
-        var fakeAccPast={nick:c.name,dueDay:dueDay,value:val,id:c.id,clientId:c.id};
-        alerts.push({acc:fakeAccPast,client:c,type:'overdue',days:pastDays,dueDate:pastDue,month:pm});
-      }
+      if(pastDays>0)alerts.push({acc:fakeAcc,client:c,type:'overdue',days:pastDays,dueDate:pastDue,month:pm});
     }
-    // Mês atual
+    // 2. Mês atual e futuros: agrupa meses a vencer por cliente
     var p=getClientPayment(c.id,m,y);
     if(p&&p.status==='paid')return;
     if(p&&p.status==='neutral')return;
     var dueDate=new Date(y,m-1,dueDay);
-    var diffDays=Math.ceil((dueDate-now)/(86400000));
-    var fakeAcc={nick:c.name,dueDay:dueDay,value:val,id:c.id,clientId:c.id};
-    if(diffDays<0)alerts.push({acc:fakeAcc,client:c,type:'overdue',days:Math.abs(diffDays),dueDate:dueDate,month:m});
-    else if(diffDays===0)alerts.push({acc:fakeAcc,client:c,type:'today',days:0,dueDate:dueDate,month:m});
-    else if(diffDays<=alertDays)alerts.push({acc:fakeAcc,client:c,type:'soon',days:diffDays,dueDate:dueDate,month:m});
+    var diffDays=Math.ceil((dueDate-now)/86400000);
+    if(diffDays<0){
+      alerts.push({acc:fakeAcc,client:c,type:'overdue',days:Math.abs(diffDays),dueDate:dueDate,month:m});
+    } else if(diffDays===0){
+      alerts.push({acc:fakeAcc,client:c,type:'today',days:0,dueDate:dueDate,month:m});
+    } else if(diffDays<=alertDays){
+      // Conta quantos meses futuros também estão pendentes
+      var pendingMonths=[m];
+      for(var fm=m+1;fm<=12;fm++){
+        var fp=getClientPayment(c.id,fm,y);
+        if(fp&&(fp.status==='paid'||fp.status==='neutral'))break;
+        pendingMonths.push(fm);
+      }
+      var totalDays=pendingMonths.length*30;
+      alerts.push({acc:fakeAcc,client:c,type:'soon',days:diffDays,dueDate:dueDate,month:m,pendingMonths:pendingMonths,totalDays:totalDays});
+    }
   });
   return alerts.sort(function(a,b){
     if(a.type==='overdue'&&b.type!=='overdue')return -1;
@@ -1218,8 +1227,23 @@ function getAlertList(){
 }
 
 function alertItemHTML(al,showActions){
-  var typeLabel=al.type==='overdue'?(al.days+'d em atraso'):al.type==='today'?'Vence hoje':(al.days+'d para vencer');
-  var monthLabel=al.month?MONTHS_SHORT[al.month-1]+' · ':'';
+  var typeLabel,monthLabel;
+  if(al.type==='overdue'){
+    typeLabel=al.days+'d em atraso';
+    monthLabel=al.month?MONTHS_SHORT[al.month-1]+' · ':'';
+  } else if(al.type==='today'){
+    typeLabel='Vence hoje';
+    monthLabel=al.month?MONTHS_SHORT[al.month-1]+' · ':'';
+  } else {
+    var pm=al.pendingMonths||[al.month];
+    if(pm.length>1){
+      monthLabel=MONTHS_SHORT[pm[0]-1]+' → '+MONTHS_SHORT[pm[pm.length-1]-1]+' · ';
+      typeLabel=pm.length+' meses · ~'+al.totalDays+'d a vencer';
+    } else {
+      monthLabel=al.month?MONTHS_SHORT[al.month-1]+' · ':'';
+      typeLabel=al.days+'d para vencer';
+    }
+  }
   var waBtn=al.client&&al.client.phone?'<button class="btn-xs wa" onclick="openWAModal(\''+al.client.id+'\')">📱 WA</button>':'';
   var actions=showActions?'<div class="alert-actions"><button class="btn-xs pay" onclick="quickPay(\''+al.acc.id+'\')">Pago</button>'+waBtn+'</div>':'';
   return '<div class="alert-item '+al.type+'"><div class="alert-dot '+al.type+'"></div><div class="alert-info"><div class="alert-nick">'+al.acc.nick+'</div><div class="alert-detail">'+monthLabel+'Dia '+al.acc.dueDay+' · '+typeLabel+'</div></div><div class="alert-value '+al.type+'">'+fmtMoney(al.acc.value)+'</div>'+actions+'</div>';
