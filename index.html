@@ -1781,8 +1781,23 @@ function openPackageModal(clientId){
     histHtml;
   document.getElementById('modal-footer').innerHTML=
     '<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>'+
+    (pkg?'<button class="btn btn-secondary" style="border-color:rgba(255,56,96,0.4);color:var(--red)" onclick="removeClientPackage(\''+clientId+'\')">Remover Pacote</button>':'')+
     '<button class="btn btn-primary" onclick="savePackageModal(\''+clientId+'\')">Ativar Pacote</button>';
   document.getElementById('modal-overlay').classList.add('open');
+}
+
+function removeClientPackage(clientId){
+  if(!confirm('Remover o pacote deste cliente? Os pagamentos já lançados não serão alterados.'))return;
+  if(DB.clientPackages&&DB.clientPackages[clientId]){
+    var pkg=DB.clientPackages[clientId];
+    if(pkg.current){
+      pkg.history=pkg.history||[];
+      pkg.current.status='expired';
+      pkg.history.unshift(pkg.current);
+      pkg.current=null;
+    }
+  }
+  save();closeModal();toast('Pacote removido','info');renderClients();
 }
 
 function savePackageModal(clientId){
