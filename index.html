@@ -153,6 +153,8 @@ tr:last-child td{border-bottom:none}
 .badge.pending{background:rgba(255,214,0,0.1);color:#e6c200;border:1px solid rgba(255,214,0,0.2)}
 .badge.exempt{background:rgba(139,92,246,0.1);color:var(--purple);border:1px solid rgba(139,92,246,0.2)}
 .badge.active{background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.2)}
+.badge.pkg-active{background:rgba(0,255,136,0.08);color:#00c96a;border:1px solid rgba(0,255,136,0.25)}
+.badge.pkg-expired{background:rgba(255,56,96,0.08);color:var(--red);border:1px solid rgba(255,56,96,0.25)}
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .search-box{position:relative;flex:1;min-width:200px}
 .search-box input{width:100%;background:var(--bg3);border:1px solid rgba(0,212,255,0.2);border-radius:var(--radius);padding:7px 12px 7px 32px;color:var(--text);font-size:13px;font-family:'Inter',sans-serif;outline:none;transition:var(--transition);box-shadow:0 0 6px rgba(0,212,255,0.04)}
@@ -605,7 +607,7 @@ select option{background:var(--bg3)}
         <div class="toolbar" style="margin-bottom:14px">
           <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="client-search" placeholder="Buscar cliente..." oninput="renderClients()"></div>
         </div>
-        <div class="table-wrap"><table><thead><tr><th style="width:40px;text-align:center">#</th><th>Nome</th><th>Telefone</th><th>Contas</th><th>Venc.</th><th>Total/mês</th><th>Status mês</th><th>Ações</th></tr></thead><tbody id="clients-tbody"></tbody><tfoot id="clients-tfoot"></tfoot></table></div>
+        <div class="table-wrap"><table><thead><tr><th style="width:40px;text-align:center">#</th><th>Nome</th><th>Telefone</th><th>Contas</th><th>Venc.</th><th>Total/mês</th><th>Status mês</th><th>Pacote</th><th>Ações</th></tr></thead><tbody id="clients-tbody"></tbody><tfoot id="clients-tfoot"></tfoot></table></div>
       </div>
     </div>
 
@@ -788,7 +790,7 @@ window._fload = async function() {
             // Salva no path do admin
             await setDoc(doc(_db,'users',u.uid,'appdata','main'), {json: JSON.stringify(window.DB)});
             // Limpa jarvis/data para ninguém mais pegar
-            await setDoc(doc(_db,'jarvis','data'), {json: JSON.stringify({clients:[],accounts:[],payments:[],clientPayments:{},settings:{}})});
+            await setDoc(doc(_db,'jarvis','data'), {json: JSON.stringify({clients:[],accounts:[],payments:[],clientPayments:{},clientPackages:{},settings:{}})});
             window._migrationDone = true;
           }
         }
@@ -800,10 +802,11 @@ window._fload = async function() {
   if(!window.DB.accounts) window.DB.accounts=[];
   if(!window.DB.payments) window.DB.payments=[];
   if(!window.DB.clientPayments) window.DB.clientPayments={};
+  if(!window.DB.clientPackages) window.DB.clientPackages={};
 };
 
 window._clearUserData = async function(uid){
-  const empty={clients:[],accounts:[],payments:[],clientPayments:{},settings:{name:'SMART Finance',currency:'R$',alertDays:10}};
+  const empty={clients:[],accounts:[],payments:[],clientPayments:{},clientPackages:{},settings:{name:'SMART Finance',currency:'R$',alertDays:10}};
   await setDoc(doc(_db,'users',uid,'appdata','main'),{json:JSON.stringify(empty)});
 };
 
@@ -921,7 +924,7 @@ onAuthStateChanged(_auth, async function(user){
 </script>
 
 <script>
-var DB={clients:[],accounts:[],payments:[],clientPayments:{},settings:{name:'SMART Finance',currency:'R$',alertDays:10}};
+var DB={clients:[],accounts:[],payments:[],clientPayments:{},clientPackages:{},settings:{name:'SMART Finance',currency:'R$',alertDays:10}};
 var chartBar=null,chartPie=null,currentReportType=null,currentReportData=[];
 var MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 var MONTHS_SHORT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -1456,7 +1459,7 @@ function renderClients(){
   document.getElementById('clients-count-label').textContent=filtered.length+' de '+DB.clients.length+' clientes';
   var now=today(),m=now.getMonth()+1,y=now.getFullYear();
   var tbody=document.getElementById('clients-tbody');
-  if(!filtered.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:32px">Nenhum cliente encontrado</td></tr>';return;}
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:32px">Nenhum cliente encontrado</td></tr>';return;}
   tbody.innerHTML=filtered.map(function(c,idx){
     var accs=clientAccounts(c.id);
     var p=getClientPayment(c.id,m,y);
@@ -1476,7 +1479,8 @@ function renderClients(){
     var dueDay=getClientDueDay(c.id);
     var monthVal=getClientMonthValue(c.id);
     var num=String(idx+1).padStart(2,'0');
-    return '<tr><td style="text-align:center;color:var(--text3);font-family:JetBrains Mono,monospace;font-size:11px;font-weight:600">#'+num+'</td><td><div style="font-weight:500">'+c.name+'</div>'+(c.obs?'<div style="font-size:11px;color:var(--text3)">'+c.obs+'</div>':'')+'</td><td class="mono" style="font-size:12px">'+(c.phone||'—')+'</td><td><span class="badge active">'+accs.length+' contas</span></td><td><span class="badge pending">Dia '+dueDay+'</span></td><td class="mono" style="color:var(--cyan)">'+fmtMoney(monthVal)+'</td><td>'+statusBadge+'</td><td><div style="display:flex;gap:6px">'+(c.phone?'<button class="btn-xs wa" onclick="openWAModal(\''+c.id+'\')">📱 WA</button>':'')+'<button class="btn-xs info" onclick="viewClientDetail(\''+c.id+'\')">Detalhes</button><button class="btn-xs secondary" onclick="openClientModal(\''+c.id+'\')">Editar</button><button class="btn-xs danger" onclick="deleteClient(\''+c.id+'\')">Excluir</button></div></td></tr>';
+    var pkgBadge=buildPackageBadge(c.id);
+    return '<tr><td style="text-align:center;color:var(--text3);font-family:JetBrains Mono,monospace;font-size:11px;font-weight:600">#'+num+'</td><td><div style="font-weight:500">'+c.name+'</div>'+(c.obs?'<div style="font-size:11px;color:var(--text3)">'+c.obs+'</div>':'')+'</td><td class="mono" style="font-size:12px">'+(c.phone||'—')+'</td><td><span class="badge active">'+accs.length+' contas</span></td><td><span class="badge pending">Dia '+dueDay+'</span></td><td class="mono" style="color:var(--cyan)">'+fmtMoney(monthVal)+'</td><td>'+statusBadge+'</td><td>'+pkgBadge+'</td><td><div style="display:flex;gap:6px;flex-wrap:wrap">'+(c.phone?'<button class="btn-xs wa" onclick="openWAModal(\''+c.id+'\')">📱 WA</button>':'')+'<button class="btn-xs info" onclick="viewClientDetail(\''+c.id+'\')">Detalhes</button><button class="btn-xs" style="background:rgba(0,255,136,0.1);color:#00c96a;border:1px solid rgba(0,255,136,0.25)" onclick="openPackageModal(\''+c.id+'\')">📦 Pacote</button><button class="btn-xs secondary" onclick="openClientModal(\''+c.id+'\')">Editar</button><button class="btn-xs danger" onclick="deleteClient(\''+c.id+'\')">Excluir</button></div></td></tr>';
   }).join('');
 
   // ── Totals footer ──────────────────────────────────────────────────
@@ -1512,6 +1516,7 @@ function renderClients(){
       '</div>'+
     '</td>'+
     '<td></td>'+
+    '<td></td>'+
   '</tr>';
 }
 
@@ -1539,6 +1544,7 @@ function deleteClient(id){
   DB.payments=DB.payments.filter(function(p){return !accIds.includes(p.accountId)});
   DB.accounts=DB.accounts.filter(function(a){return a.clientId!==id});
   DB.clients=DB.clients.filter(function(c){return c.id!==id});
+  if(DB.clientPackages&&DB.clientPackages[id])delete DB.clientPackages[id];
   save();toast('Cliente excluído','info');renderClients();updateAccountClientFilter();
 }
 
@@ -1688,6 +1694,125 @@ function getClientDueDay(clientId){
   var accs=clientAccounts(clientId);
   return accs.length>0?accs[0].dueDay:10;
 }
+// ── Sistema de Pacotes ──────────────────────────────────────────────
+var PACKAGE_MONTHS={monthly:1,quarterly:3,semiannual:6,annual:12};
+var PACKAGE_LABELS={monthly:'Mensal',quarterly:'Trimestral',semiannual:'Semestral',annual:'Anual'};
+
+function getClientPackage(clientId){
+  if(!DB.clientPackages||!DB.clientPackages[clientId])return null;
+  return DB.clientPackages[clientId].current||null;
+}
+
+function checkAndExpirePackages(){
+  if(!DB.clientPackages)return;
+  var todayStr=new Date().toISOString().split('T')[0];
+  var changed=false;
+  Object.keys(DB.clientPackages).forEach(function(cid){
+    var pkg=DB.clientPackages[cid];
+    if(pkg.current&&pkg.current.status==='active'&&pkg.current.endDate<todayStr){
+      pkg.current.status='expired';
+      changed=true;
+    }
+  });
+  if(changed)save();
+}
+
+function activateClientPackage(clientId,type,startDateStr,price){
+  if(!DB.clientPackages)DB.clientPackages={};
+  if(!DB.clientPackages[clientId])DB.clientPackages[clientId]={current:null,history:[]};
+  var months=PACKAGE_MONTHS[type];
+  if(!months){console.warn('activateClientPackage: tipo inválido',type);return;}
+  var startDate=new Date(startDateStr+'T00:00:00');
+  var startM=startDate.getMonth()+1,startY=startDate.getFullYear();
+  var endM=startM+months-1,endY=startY;
+  while(endM>12){endM-=12;endY++;}
+  var lastDay=new Date(endY,endM,0).getDate();
+  var endDateStr=endY+'-'+String(endM).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0');
+  var priceTotal=parseFloat(price)||0;
+  var perMonth=months>0?Math.round((priceTotal/months)*100)/100:priceTotal;
+  for(var i=0;i<months;i++){
+    var mm=startM+i,yy=startY;
+    while(mm>12){mm-=12;yy++;}
+    setClientPayment(clientId,mm,yy,{status:'paid',valuePaid:perMonth,date:startDateStr,obs:'Pacote '+PACKAGE_LABELS[type]});
+  }
+  var pkg=DB.clientPackages[clientId];
+  if(pkg.current){pkg.history=pkg.history||[];pkg.history.unshift(pkg.current);}
+  pkg.current={id:uid(),type:type,startDate:startDateStr,endDate:endDateStr,price:priceTotal,status:'active',activatedAt:new Date().toISOString().split('T')[0],months:months};
+  save();
+}
+
+function openPackageModal(clientId){
+  var c=getClientById(clientId);if(!c)return;
+  var pkg=getClientPackage(clientId);
+  var now=new Date();
+  var defaultStart=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-01';
+  var histHtml='';
+  if(DB.clientPackages&&DB.clientPackages[clientId]&&(DB.clientPackages[clientId].history||[]).length){
+    var hist=DB.clientPackages[clientId].history;
+    histHtml='<div style="margin-top:16px"><div style="font-size:11px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Histórico</div>';
+    hist.slice(0,5).forEach(function(h){
+      var sd=h.startDate?h.startDate.split('-').reverse().join('/'):'';
+      var ed=h.endDate?h.endDate.split('-').reverse().join('/'):'';
+      histHtml+='<div style="background:var(--bg4);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px;display:flex;justify-content:space-between;align-items:center">'+
+        '<span style="color:var(--text2)">'+PACKAGE_LABELS[h.type]+'</span>'+
+        '<span style="color:var(--text3)">'+sd+' → '+ed+'</span>'+
+        '<span style="color:var(--cyan)">'+fmtMoney(h.price)+'</span>'+
+      '</div>';
+    });
+    histHtml+='</div>';
+  }
+  document.getElementById('modal-title').textContent='Pacote — '+c.name;
+  document.getElementById('modal-body').innerHTML=
+    (pkg?'<div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">'+
+      '<div><div style="font-size:12px;color:var(--text3)">Pacote atual</div><div style="font-weight:600;color:'+(pkg.status==='active'?'#00c96a':'var(--red)')+'">'+PACKAGE_LABELS[pkg.type]+' — '+(pkg.status==='active'?'Ativo':'Vencido')+'</div></div>'+
+      '<div style="text-align:right"><div style="font-size:11px;color:var(--text3)">'+(pkg.status==='active'?'Ativo até':'Venceu em')+'</div><div style="font-size:13px;font-weight:600;color:var(--text)">'+(pkg.endDate?pkg.endDate.split('-').reverse().join('/'):'?')+'</div></div>'+
+    '</div>':'<div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:var(--text3)">Nenhum pacote ativo para este cliente.</div>')+
+    '<div class="form-group"><label class="form-label">Tipo de Pacote *</label>'+
+    '<select class="form-input" id="pk-type">'+
+      '<option value="monthly">Mensal (1 mês)</option>'+
+      '<option value="quarterly">Trimestral (3 meses)</option>'+
+      '<option value="semiannual">Semestral (6 meses)</option>'+
+      '<option value="annual">Anual (12 meses)</option>'+
+    '</select></div>'+
+    '<div class="form-row">'+
+      '<div class="form-group"><label class="form-label">Data de Início *</label><input type="date" class="form-input" id="pk-start" value="'+defaultStart+'"></div>'+
+      '<div class="form-group"><label class="form-label">Valor do Pacote (R$) *</label><input type="number" class="form-input" id="pk-price" step="0.01" min="0" placeholder="0.00" value="'+(c.monthlyValue||'')+'"></div>'+
+    '</div>'+
+    histHtml;
+  document.getElementById('modal-footer').innerHTML=
+    '<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>'+
+    '<button class="btn btn-primary" onclick="savePackageModal(\''+clientId+'\')">Ativar Pacote</button>';
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function savePackageModal(clientId){
+  var type=document.getElementById('pk-type').value;
+  var startDate=document.getElementById('pk-start').value;
+  var price=parseFloat(document.getElementById('pk-price').value)||0;
+  if(!startDate){toast('Informe a data de início','error');return;}
+  if(price<=0){toast('Informe o valor do pacote','error');return;}
+  activateClientPackage(clientId,type,startDate,price);
+  closeModal();
+  toast('Pacote '+PACKAGE_LABELS[type]+' ativado!','success');
+  renderClients();
+}
+
+function buildPackageBadge(clientId){
+  var pkg=getClientPackage(clientId);
+  if(!pkg)return '<span style="color:var(--text3);font-size:12px">—</span>';
+  var endFmt=pkg.endDate?pkg.endDate.split('-').reverse().join('/'):'?';
+  if(pkg.status==='active'){
+    return '<div style="display:flex;flex-direction:column;gap:2px">'+
+      '<span class="badge pkg-active">'+PACKAGE_LABELS[pkg.type]+'</span>'+
+      '<span style="font-size:10px;color:var(--text3)">até '+endFmt+'</span>'+
+    '</div>';
+  }
+  return '<div style="display:flex;flex-direction:column;gap:2px">'+
+    '<span class="badge pkg-expired">Vencido</span>'+
+    '<span style="font-size:10px;color:var(--text3)">'+endFmt+'</span>'+
+  '</div>';
+}
+
 function buildClientHistDots(clientId,curM,curY,count){
   // Show all 12 months of the selected year with click-to-toggle + auto status logic
   var html='';var y=curY;
@@ -2195,12 +2320,26 @@ function exportAccountsXLSX(){
   }catch(err){toast('Erro: '+err.message,'error');console.error(err);}
 }
 
+function buildPkgRow(clientId,isFirstRow){
+  if(!isFirstRow)return ['','','','',''];
+  var pkg=getClientPackage(clientId);
+  if(!pkg)return ['','','','',''];
+  return [
+    PACKAGE_LABELS[pkg.type]||pkg.type,
+    pkg.startDate||'',
+    pkg.endDate||'',
+    pkg.price||0,
+    pkg.status==='active'?'ATIVO':'VENCIDO'
+  ];
+}
+
 function exportFullXLSX(){
   if(!window.XLSX){toast('Biblioteca XLSX nao carregou, recarregue a pagina','error');return;}
   try{
     var wb=XLSX.utils.book_new();
     var header=['Cliente','Telefone','Dia Venc.','Valor Mensal (R$)','IGG ID','Nick',
-      'Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+      'Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez',
+      'Pacote Tipo','Pacote Inicio','Pacote Fim','Pacote Valor (R$)','Pacote Status'];
     var y=today().getFullYear();
     var rows=[header];
     sortedClients().forEach(function(c){
@@ -2209,17 +2348,18 @@ function exportFullXLSX(){
       var monthVal=parseFloat(getClientMonthValue(c.id))||0;
       var payRow=buildPayRow(c,y);
       if(accs.length===0){
-        rows.push([c.name,c.phone||'',dueDay,monthVal,'',''].concat(payRow));
+        rows.push([c.name,c.phone||'',dueDay,monthVal,'',''].concat(payRow).concat(buildPkgRow(c.id,true)));
       } else {
         accs.forEach(function(acc,i){
           var cd=i===0?[c.name,c.phone||'',dueDay,monthVal]:['','','',''];
-          rows.push(cd.concat([acc.igg||'',acc.nick]).concat(payRow));
+          rows.push(cd.concat([acc.igg||'',acc.nick]).concat(payRow).concat(buildPkgRow(c.id,i===0)));
         });
       }
     });
     var ws=xlsxSheet(rows);
     ws['!cols']=[{wch:20},{wch:16},{wch:10},{wch:14},{wch:14},{wch:24},
-      {wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9}];
+      {wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},
+      {wch:14},{wch:14},{wch:14},{wch:16},{wch:12}];
     XLSX.utils.book_append_sheet(wb,ws,'SMART Finance');
     var fname='smartfinance_'+y+'_'+new Date().toISOString().split('T')[0]+'.xlsx';
     XLSX.writeFile(wb,fname);
@@ -2242,27 +2382,32 @@ function downloadXLSXTemplate(){
   try{
     var wb=XLSX.utils.book_new();
     var header=['Cliente','Telefone','Dia Venc.','Valor Mensal (R$)','IGG ID','Nick / Identificador',
-      'Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+      'Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez',
+      'Pacote Tipo','Pacote Inicio','Pacote Fim','Pacote Valor (R$)','Pacote Status'];
     var rows=[
       header,
-      ['Joao Silva','5511999990001',6,90,'1234567890','JoaoGamer','PAGO','PAGO','PAGO','PAGO','PAGO','','','','','','',''],
-      ['','','','','1234567891','JoaoBanco','PAGO','PAGO','PAGO','PAGO','PENDENTE','','','','','','',''],
-      ['Maria Costa','5521988880002',10,45,'9876543210','MariaPlay','PAGO','PAGO','VENCIDO','','','','','','','','',''],
-      ['Carlos MR','5531977770003',15,120,'','CarlosMR','PAGO','PAGO','PAGO','PAGO','PAGO','','','','','','',''],
-      ['Carlos MR','','','','5551239999','CarlosMR2','PAGO','PAGO','','','','','','','','','',''],
+      ['Joao Silva','5511999990001',6,90,'1234567890','JoaoGamer','PAGO','PAGO','PAGO','PAGO','PAGO','','','','','','','','Trimestral','2026-04-01','2026-06-30',240,'ATIVO'],
+      ['','','','','1234567891','JoaoBanco','PAGO','PAGO','PAGO','PAGO','PENDENTE','','','','','','','','','','','',''],
+      ['Maria Costa','5521988880002',10,45,'9876543210','MariaPlay','PAGO','PAGO','VENCIDO','','','','','','','','','','Mensal','2026-03-01','2026-03-31',45,'VENCIDO'],
+      ['Carlos MR','5531977770003',15,120,'','CarlosMR','PAGO','PAGO','PAGO','PAGO','PAGO','','','','','','','','Semestral','2026-01-01','2026-06-30',660,'ATIVO'],
+      ['Carlos MR','','','','5551239999','CarlosMR2','PAGO','PAGO','','','','','','','','','','','','','','',''],
       [],
-      ['=== INSTRUCOES ===','','','','','','','','','','','','','','','','',''],
-      ['Cliente: nome do cliente. Na 1a conta preencha; nas demais deixe em branco','','','','','','','','','','','','','','','','',''],
-      ['Telefone: com codigo do pais+DDD, ex: 5511999990001 (opcional)','','','','','','','','','','','','','','','','',''],
-      ['Dia Venc.: dia do mes de vencimento, ex: 6 (opcional)','','','','','','','','','','','','','','','','',''],
-      ['Valor Mensal: valor em reais, ex: 90 (opcional)','','','','','','','','','','','','','','','','',''],
-      ['IGG ID: ID numerico do jogo (opcional)','','','','','','','','','','','','','','','','',''],
-      ['Nick: apelido da conta (OBRIGATORIO)','','','','','','','','','','','','','','','','',''],
-      ['Meses: PAGO, PENDENTE, VENCIDO ou em branco','','','','','','','','','','','','','','','','',''],
+      ['=== INSTRUCOES ===','','','','','','','','','','','','','','','','','','','','','',''],
+      ['Cliente: nome do cliente. Na 1a conta preencha; nas demais deixe em branco','','','','','','','','','','','','','','','','','','','','','',''],
+      ['Telefone: com codigo do pais+DDD, ex: 5511999990001 (opcional)','','','','','','','','','','','','','','','','','','','','','',''],
+      ['Dia Venc.: dia do mes de vencimento, ex: 6 (opcional)','','','','','','','','','','','','','','','','','','','','','',''],
+      ['Valor Mensal: valor em reais, ex: 90 (opcional)','','','','','','','','','','','','','','','','','','','','','',''],
+      ['IGG ID: ID numerico do jogo (opcional)','','','','','','','','','','','','','','','','','','','','','',''],
+      ['Nick: apelido da conta (OBRIGATORIO)','','','','','','','','','','','','','','','','','','','','','',''],
+      ['Meses: PAGO, PENDENTE, VENCIDO ou em branco','','','','','','','','','','','','','','','','','','','','','',''],
+      ['Pacote Tipo: Mensal, Trimestral, Semestral ou Anual (opcional, so na 1a linha do cliente)','','','','','','','','','','','','','','','','','','','','','',''],
+      ['Pacote Inicio/Fim: data no formato AAAA-MM-DD (ex: 2026-06-01)','','','','','','','','','','','','','','','','','','','','','',''],
+      ['Pacote Valor: valor total do pacote em reais (ex: 240)','','','','','','','','','','','','','','','','','','','','','',''],
     ];
     var ws=xlsxSheet(rows);
     ws['!cols']=[{wch:55},{wch:16},{wch:10},{wch:16},{wch:14},{wch:24},
-      {wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9}];
+      {wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},
+      {wch:14},{wch:14},{wch:14},{wch:16},{wch:12}];
     XLSX.utils.book_append_sheet(wb,ws,'Modelo');
     XLSX.writeFile(wb,'modelo_smartfinance.xlsx');
     toast('Modelo baixado!','success');
@@ -2290,13 +2435,18 @@ function importFullXLSX(e){
         cliente:colIdx(['cliente']),
         tel:colIdx(['telefone','tel','phone']),
         due:colIdx(['venc','dia venc']),
-        val:colIdx(['valor']),
+        val:colIdx(['valor mensal','valor']),
         igg:colIdx(['igg']),
         nick:colIdx(['nick']),
-        jan:colIdx(['jan'])
+        jan:colIdx(['jan']),
+        pkgTipo:colIdx(['pacote tipo']),
+        pkgInicio:colIdx(['pacote inicio','pacote início']),
+        pkgFim:colIdx(['pacote fim']),
+        pkgVal:colIdx(['pacote valor']),
       };
       if(CI.nick<0){toast('Coluna Nick nao encontrada na planilha','error');return;}
-      var addedC=0,updatedC=0,addedA=0,updatedA=0,paySet=0;
+      var PKG_TYPE_MAP={'mensal':'monthly','trimestral':'quarterly','semestral':'semiannual','anual':'annual'};
+      var addedC=0,updatedC=0,addedA=0,updatedA=0,paySet=0,pkgSet=0;
       var lastCName='',lastCId='';
       var y=today().getFullYear();
       data.slice(1).forEach(function(row){
@@ -2348,10 +2498,30 @@ function importFullXLSX(e){
             paySet++;
           }
         }
+        if(CI.pkgTipo>=0&&cname){
+          var pkgTipoRaw=String(row[CI.pkgTipo]||'').trim().toLowerCase();
+          var pkgType=PKG_TYPE_MAP[pkgTipoRaw]||null;
+          var pkgStartRaw=CI.pkgInicio>=0?row[CI.pkgInicio]:'';
+          var pkgStart=(function(v){
+            var s=String(v||'').trim();
+            if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+            if(/^\d+(\.\d+)?$/.test(s)&&parseFloat(s)>1000){
+              var d=new Date(Math.round((parseFloat(s)-25569)*86400000));
+              return isNaN(d.getTime())?'':d.toISOString().split('T')[0];
+            }
+            var d=new Date(s);return isNaN(d.getTime())?'':d.toISOString().split('T')[0];
+          })(pkgStartRaw);
+          var pkgPrice=CI.pkgVal>=0?parseFloat(String(row[CI.pkgVal]||'').replace(',','.'))||0:0;
+          if(pkgType&&pkgStart&&pkgPrice>0){
+            activateClientPackage(lastCId,pkgType,pkgStart,pkgPrice);
+            pkgSet++;
+          }
+        }
       });
       if(!DB.clientPayments)DB.clientPayments={};
+      if(!DB.clientPackages)DB.clientPackages={};
       save();e.target.value='';
-      toast('Importado! '+addedC+' clientes novos | '+updatedC+' atualizados | '+addedA+' contas novas | '+updatedA+' atualizadas | '+paySet+' pagamentos','success',7000);
+      toast('Importado! '+addedC+' clientes novos | '+updatedC+' atualizados | '+addedA+' contas novas | '+updatedA+' atualizadas | '+paySet+' pagamentos'+(pkgSet?' | '+pkgSet+' pacotes':''),'success',7000);
       renderDashboard();updateAlertBadge();updateAccountClientFilter();
       if(document.getElementById('view-clients').classList.contains('active'))renderClients();
       if(document.getElementById('view-accounts').classList.contains('active'))renderAccounts();
@@ -2406,6 +2576,7 @@ function initAppData(){
   document.getElementById('content').style.opacity='0.4';
   Promise.resolve(load()).then(function(){
     seedData();
+    checkAndExpirePackages();
     updateAccountClientFilter();renderDashboard();updateAlertBadge();
     document.getElementById('content').style.opacity='1';
     document.getElementById('content').style.transition='opacity 0.4s';
