@@ -2390,8 +2390,10 @@ function buildPayRow(client,y){
   for(var m=1;m<=12;m++){
     var p=getClientPayment(client.id,m,y);
     var s;
-    if(p&&(p.status==='paid'||p.status==='overdue'||p.status==='pending'||p.status==='neutral')){
-      s=p.status==='neutral'?'empty':p.status;
+    if(p&&p.status==='paid'){
+      s='paid';
+    } else if(p&&p.status==='neutral'){
+      s='empty';
     } else {
       var isFuture=(y>nowY)||(y===nowY&&m>nowM);
       var isPast=(y<nowY)||(y===nowY&&m<nowM);
@@ -2402,7 +2404,9 @@ function buildPayRow(client,y){
       } else {
         var dueDate=new Date(y,m-1,dueDay);
         var daysUntil=Math.ceil((dueDate-now)/86400000);
-        s=daysUntil>=0?'pending':'overdue';
+        if(daysUntil>10) s='empty';
+        else if(daysUntil>=0) s='pending';
+        else s='overdue';
       }
     }
     row.push(s==='paid'?'PAGO':s==='overdue'?'VENCIDO':s==='pending'?'PENDENTE':'');
