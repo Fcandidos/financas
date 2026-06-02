@@ -2384,9 +2384,27 @@ function exportFullXLSX(){
 
 function buildPayRow(client,y){
   var row=[];
+  var now=today();
+  var nowY=now.getFullYear(),nowM=now.getMonth()+1;
+  var dueDay=getClientDueDay(client.id);
   for(var m=1;m<=12;m++){
     var p=getClientPayment(client.id,m,y);
-    var s=p?p.status:'';
+    var s;
+    if(p&&(p.status==='paid'||p.status==='overdue'||p.status==='pending'||p.status==='neutral')){
+      s=p.status==='neutral'?'empty':p.status;
+    } else {
+      var isFuture=(y>nowY)||(y===nowY&&m>nowM);
+      var isPast=(y<nowY)||(y===nowY&&m<nowM);
+      if(isPast){
+        s='overdue';
+      } else if(isFuture){
+        s='empty';
+      } else {
+        var dueDate=new Date(y,m-1,dueDay);
+        var daysUntil=Math.ceil((dueDate-now)/86400000);
+        s=daysUntil>=0?'pending':'overdue';
+      }
+    }
     row.push(s==='paid'?'PAGO':s==='overdue'?'VENCIDO':s==='pending'?'PENDENTE':'');
   }
   return row;
