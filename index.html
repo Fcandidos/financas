@@ -1945,10 +1945,39 @@ function renderPaymentView(){
     var valuePaid=isPaid?parseFloat(p.valuePaid||val):val;
     var accs=clientAccounts(c.id);
     var dueDay=getClientDueDay(c.id);
+    var overdueInfo=(function(){
+      var now=today(),nowY=now.getFullYear(),nowM=now.getMonth()+1;
+      var html='';
+      var oldest=null,oldestDays=0;
+      for(var pm=1;pm<=(y<nowY?12:(y===nowY?nowM-1:0));pm++){
+        var pp=getClientPayment(c.id,pm,y);
+        if(pp&&pp.status==='paid')continue;
+        if(pp&&pp.status==='neutral')continue;
+        var dd=new Date(y,pm-1,dueDay);
+        var days=Math.floor((now-dd)/86400000);
+        if(days>0&&(oldest===null||pm<oldest)){oldest=pm;oldestDays=days;}
+      }
+      if(oldest!==null)
+        html+='<div style="margin-top:5px;font-size:11px;color:var(--red);font-weight:600">⚠️ '+MONTHS[oldest-1]+' vencido há '+oldestDays+' dia'+(oldestDays>1?'s':'')+'</div>';
+      if(y===nowY&&!isPaid){
+        var curPay=getClientPayment(c.id,nowM,nowY);
+        var isNeutralCur=curPay&&curPay.status==='neutral';
+        if(!isNeutralCur){
+          var dueCur=new Date(nowY,nowM-1,dueDay);
+          var diffCur=Math.ceil((dueCur-now)/86400000);
+          if(diffCur>0)
+            html+='<div style="margin-top:4px;font-size:11px;color:#e6c200;font-weight:600">📅 '+MONTHS[nowM-1]+' vence em '+diffCur+' dia'+(diffCur>1?'s':'')+'</div>';
+          else if(diffCur<=0&&nowM===m)
+            html+='<div style="margin-top:4px;font-size:11px;color:var(--red);font-weight:600">⚠️ '+MONTHS[nowM-1]+' vencido há '+Math.abs(diffCur)+' dia'+(Math.abs(diffCur)!==1?'s':'')+'</div>';
+        }
+      }
+      return html;
+    })();
     return '<div class="pay-toggle" style="gap:14px" id="ptog-'+c.id+'">'+
       '<div class="pay-toggle-info" style="flex:1">'+
         '<div class="pay-toggle-nick" style="font-size:14px;font-weight:600">'+c.name+'</div>'+
         '<div class="pay-toggle-detail">'+accs.length+' conta(s) · Venc. dia '+dueDay+(isPaid&&p&&p.date?' · <span style="color:var(--green)">Pago em '+p.date.split('-').reverse().join('/')+'</span>':'')+'</div>'+
+        overdueInfo+
         '<div class="pay-history" style="margin-top:6px">'+buildClientHistDots(c.id,m,y,6)+'</div>'+
         '<div id="accs-panel-'+c.id+'" style="display:none;margin-top:10px;border-top:1px solid rgba(0,212,255,0.12);padding-top:10px"></div>'+
       '</div>'+
