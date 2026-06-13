@@ -937,6 +937,7 @@ function seedData(){}
 function uid(){return Math.random().toString(36).substr(2,9)}
 function sortedClients(){return DB.clients.slice().sort(function(a,b){return a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'});})}
 function fmtMoney(v){return (DB.settings.currency||'R$')+' '+parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function fmtPhone(p){if(!p)return '';var d=p.replace(/\D/g,'');if(d.length===11)return '('+d.slice(0,2)+') '+d.slice(2,7)+'-'+d.slice(7);if(d.length===10)return '('+d.slice(0,2)+') '+d.slice(2,6)+'-'+d.slice(6);return p;}
 function today(){return new Date()}
 function getClientById(id){return DB.clients.find(function(c){return c.id===id})}
 function getAccountById(id){return DB.accounts.find(function(a){return a.id===id})}
@@ -2019,7 +2020,7 @@ function renderPaymentView(){
     })();
     return '<div class="pay-toggle" style="gap:14px" id="ptog-'+c.id+'">'+
       '<div class="pay-toggle-info" style="flex:1">'+
-        '<div class="pay-toggle-nick" style="font-size:14px;font-weight:600">'+c.name+'</div>'+
+        '<div class="pay-toggle-nick" style="font-size:14px;font-weight:600">'+c.name+(c.phone?'<span style="font-size:11px;font-weight:400;color:var(--text3);margin-left:8px">📞 '+fmtPhone(c.phone)+'</span>':'')+'</div>'+
         '<div class="pay-toggle-detail">'+accs.length+' conta(s) · Venc. dia '+dueDay+(isPaid&&p&&p.date?' · <span style="color:var(--green)">Pago em '+p.date.split('-').reverse().join('/')+'</span>':'')+'</div>'+
         overdueInfo+
         '<div class="pay-history" style="margin-top:6px">'+buildClientHistDots(c.id,m,y,6)+'</div>'+
